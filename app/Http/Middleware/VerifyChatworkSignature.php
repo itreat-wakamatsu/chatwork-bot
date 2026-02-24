@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\BotSetting;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -11,7 +12,8 @@ class VerifyChatworkSignature
     public function handle(Request $request, Closure $next): Response
     {
         $headerSignature = (string) $request->header('x-chatworkwebhooksignature', '');
-        $token = (string) config('services.chatwork.webhook_token');
+        $setting = BotSetting::query()->first();
+        $token = (string) ($setting?->chatwork_webhook_token ?: config('services.chatwork.webhook_token'));
 
         if ($headerSignature === '' || $token === '') {
             return response('Unauthorized', 401);

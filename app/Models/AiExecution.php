@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AiExecution extends Model
 {
@@ -17,5 +18,12 @@ class AiExecution extends Model
         'step_count',
         'reply_body',
         'last_error',
+        'error_type',
+        'retry_count',
     ];
+
+    public function turns(): HasMany
+    {
+        return $this->hasMany(AiExecutionTurn::class)->orderBy('step_index');
+    }
 }
