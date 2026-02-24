@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->validateCsrfTokens(except: [
+            'webhook/chatwork',
+        ]);
         $middleware->alias([
             'chatwork.signature' => VerifyChatworkSignature::class,
         ]);
