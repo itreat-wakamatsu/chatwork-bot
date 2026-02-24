@@ -18,6 +18,8 @@ class UpdateBotSettingRequest extends FormRequest
             'chatwork_api_token' => ['nullable', 'string', 'max:255'],
             'chatwork_webhook_token' => ['nullable', 'string', 'max:255'],
             'chatwork_bot_account_id' => ['nullable', 'string', 'max:255'],
+            'gemini_api_key' => ['nullable', 'string', 'max:255'],
+            'gemini_model' => ['nullable', 'string', 'max:255'],
             'enabled_tools' => ['array'],
             'enabled_tools.*' => ['string'],
             'alert_window_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],

@@ -13,6 +13,19 @@
             <div><label class="block text-sm mb-1">Chatwork API Token</label><input name="chatwork_api_token" value="{{ old('chatwork_api_token', $setting?->chatwork_api_token) }}" class="w-full border rounded p-2"></div>
             <div><label class="block text-sm mb-1">Webhook Token</label><input name="chatwork_webhook_token" value="{{ old('chatwork_webhook_token', $setting?->chatwork_webhook_token) }}" class="w-full border rounded p-2"></div>
             <div><label class="block text-sm mb-1">Bot Account ID</label><input name="chatwork_bot_account_id" value="{{ old('chatwork_bot_account_id', $setting?->chatwork_bot_account_id) }}" class="w-full border rounded p-2"></div>
+            <div><label class="block text-sm mb-1">Gemini API Key</label><input name="gemini_api_key" value="{{ old('gemini_api_key', $setting?->gemini_api_key) }}" class="w-full border rounded p-2"></div>
+            <div>
+                <label class="block text-sm mb-1">Gemini Model</label>
+                <select name="gemini_model" class="w-full border rounded p-2">
+                    @php($selectedModel = old('gemini_model', $setting?->gemini_model ?? config('services.gemini.model')))
+                    @foreach($geminiModels as $model)
+                        <option value="{{ $model['value'] }}" @selected($selectedModel === $model['value'])>{{ $model['label'] }} ({{ $model['value'] }})</option>
+                    @endforeach
+                </select>
+                @if($modelLoadError)
+                    <p class="mt-1 text-xs text-amber-700">モデル一覧の取得に失敗しました: {{ $modelLoadError }}</p>
+                @endif
+            </div>
             <div><label class="block text-sm mb-1">Alert Room ID</label><input name="alert_room_id" value="{{ old('alert_room_id', $setting?->alert_room_id) }}" class="w-full border rounded p-2"></div>
             <div><label class="block text-sm mb-1">Alert Window Minutes</label><input name="alert_window_minutes" value="{{ old('alert_window_minutes', $setting?->alert_window_minutes ?? 15) }}" class="w-full border rounded p-2"></div>
             <div><label class="block text-sm mb-1">Alert Failure Threshold</label><input name="alert_failure_threshold" value="{{ old('alert_failure_threshold', $setting?->alert_failure_threshold ?? 5) }}" class="w-full border rounded p-2"></div>

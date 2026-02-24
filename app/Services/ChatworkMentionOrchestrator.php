@@ -28,7 +28,7 @@ class ChatworkMentionOrchestrator
 1) tool_call
 2) final
 
-reply_bodyにはToメンション（[To:xxx]）を含めない。
+reply_bodyには返信記法を含めないでください。返信記法はサーバー側で付与します。
 PROMPT;
 
     public function __construct(
@@ -85,7 +85,7 @@ PROMPT;
 
         try {
             $reply = $this->buildReply($event, $execution);
-            $this->chatworkClient->postMessage($roomId, "[To:{$senderId}]\n{$reply}");
+            $this->chatworkClient->postMessage($roomId, $this->buildReplyPrefix($senderId, $roomId, $messageId)."\n{$reply}");
 
             $execution->update([
                 'status' => 'completed',
@@ -97,7 +97,7 @@ PROMPT;
             $safeError = Str::limit($e->getMessage(), 300);
             $errorType = $this->classifyError($e);
 
-            $this->chatworkClient->postMessage($roomId, "[To:{$senderId}]\n".self::ERROR_REPLY);
+            $this->chatworkClient->postMessage($roomId, $this->buildReplyPrefix($senderId, $roomId, $messageId)."\n".self::ERROR_REPLY);
 
             $execution->update([
                 'status' => 'failed',
@@ -109,23 +109,13 @@ PROMPT;
 
     private function buildReply(array $event, AiExecution $execution): string
     {
-        $roomId = (int) $event['room_id'];
-        $messageId = (string) $event['message_id'];
-
         $apiCalls = 0;
-        $latest = $this->chatworkClient->listMessages($roomId);
-        $apiCalls++;
-
-        $messagesBeforeTrigger = array_values(array_filter($latest, fn (array $m): bool => strcmp((string) ($m['message_id'] ?? ''), $messageId) < 0));
-        usort($messagesBeforeTrigger, fn (array $a, array $b): int => strcmp((string) $a['message_id'], (string) $b['message_id']));
-        $recent = array_slice($messagesBeforeTrigger, -5);
-
         $toolResults = [];
 
         for ($step = 1; $step <= self::MAX_STEPS; $step++) {
             $execution->update(['step_count' => $step]);
 
-            $userPrompt = $this->buildUserPrompt($event, $recent, $toolResults);
+            $userPrompt = $this->buildUserPrompt($event, $toolResults);
             $ai = $this->geminiClient->generateJson($this->resolveSystemPrompt(), $userPrompt);
 
             AiExecutionTurn::query()->updateOrCreate([
@@ -161,16 +151,12 @@ PROMPT;
             AiExecutionTurn::query()->where('ai_execution_id', $execution->id)
                 ->where('step_index', $step)
                 ->update(['tool_result' => $result]);
-
-            if (! empty($result['messages']) && is_array($result['messages'])) {
-                $recent = array_slice($result['messages'], -5);
-            }
         }
 
         return '確認ありがとうございます。現時点で取得できた情報をもとに回答しましたが、必要であれば追加情報をご共有ください。';
     }
 
-    private function buildUserPrompt(array $event, array $recent, array $toolResults): string
+    private function buildUserPrompt(array $event, array $toolResults): string
     {
         $triggerTime = date('Y-m-d H:i:s', (int) ($event['send_time'] ?? time()));
 
@@ -179,18 +165,9 @@ PROMPT;
         $lines[] = 'trigger_message_id: '.$event['message_id'];
         $lines[] = 'sender_account_id: '.$event['from_account_id'];
         $lines[] = '';
-        $lines[] = '【トリガーメッセージ】';
+        $lines[] = '【依頼内容（Webhook本文）】';
         $lines[] = '['.$triggerTime.']';
-        $lines[] = (string) $event['from_account_id'].':';
-        $lines[] = (string) $event['body'];
-        $lines[] = '';
-        $lines[] = '【直近メッセージ（古い順・最大5件）】';
-
-        foreach ($recent as $i => $message) {
-            $time = date('Y-m-d H:i:s', (int) ($message['send_time'] ?? time()));
-            $nameOrId = (string) data_get($message, 'account.account_id', 'unknown');
-            $lines[] = sprintf('%d) [%s] %s: %s', $i + 1, $time, $nameOrId, (string) ($message['body'] ?? ''));
-        }
+        $lines[] = $this->normalizeRequestBody((string) ($event['body'] ?? ''));
 
         if ($toolResults !== []) {
             $lines[] = '';
@@ -205,6 +182,13 @@ PROMPT;
         }
 
         return implode("\n", $lines);
+    }
+
+    private function normalizeRequestBody(string $body): string
+    {
+        $normalized = preg_replace('/\[To:\d+\]/', '', $body);
+
+        return trim((string) $normalized);
     }
 
     private function enabledToolNames(): array
@@ -229,6 +213,11 @@ PROMPT;
         $setting = BotSetting::query()->first();
 
         return (string) ($setting?->chatwork_bot_account_id ?: config('services.chatwork.bot_account_id'));
+    }
+
+    private function buildReplyPrefix(int $senderId, int $roomId, string $messageId): string
+    {
+        return "[rp aid={$senderId} to={$roomId}-{$messageId}]";
     }
 
     private function classifyError(Throwable $exception): string

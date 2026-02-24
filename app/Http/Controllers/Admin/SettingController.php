@@ -8,14 +8,17 @@ use App\Models\AuditLog;
 use App\Models\BotSetting;
 use App\Models\BotTool;
 use App\Models\SettingRevision;
+use App\Services\GeminiClient;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class SettingController extends Controller
 {
-    public function index(): View
+    public function index(GeminiClient $geminiClient): View
     {
         $this->ensureDefaultTools();
 
@@ -23,10 +26,31 @@ class SettingController extends Controller
         $tools = BotTool::query()->orderBy('name')->get();
         $revisions = SettingRevision::query()->latest()->limit(20)->get();
 
+        $modelLoadError = null;
+
+        try {
+            $geminiModels = Cache::remember('gemini.available_models', now()->addMinutes(30), function () use ($geminiClient): array {
+                return $geminiClient->listAvailableModels();
+            });
+        } catch (RuntimeException $exception) {
+            $modelLoadError = $exception->getMessage();
+            $geminiModels = [];
+        }
+
+        $currentModel = (string) ($setting?->gemini_model ?: config('services.gemini.model'));
+        if ($currentModel !== '' && collect($geminiModels)->doesntContain(fn (array $model): bool => $model['value'] === $currentModel)) {
+            $geminiModels[] = [
+                'value' => $currentModel,
+                'label' => $currentModel.' (current)',
+            ];
+        }
+
         return view('admin.settings.index', [
             'setting' => $setting,
             'tools' => $tools,
             'revisions' => $revisions,
+            'geminiModels' => $geminiModels,
+            'modelLoadError' => $modelLoadError,
         ]);
     }
 
@@ -46,6 +70,8 @@ class SettingController extends Controller
                 'chatwork_api_token' => $validated['chatwork_api_token'] ?? null,
                 'chatwork_webhook_token' => $validated['chatwork_webhook_token'] ?? null,
                 'chatwork_bot_account_id' => $validated['chatwork_bot_account_id'] ?? null,
+                'gemini_api_key' => $validated['gemini_api_key'] ?? null,
+                'gemini_model' => $validated['gemini_model'] ?? null,
                 'alert_window_minutes' => (int) ($validated['alert_window_minutes'] ?? 15),
                 'alert_failure_threshold' => (int) ($validated['alert_failure_threshold'] ?? 5),
                 'alert_room_id' => isset($validated['alert_room_id']) ? (int) $validated['alert_room_id'] : null,
@@ -78,6 +104,8 @@ class SettingController extends Controller
             ]);
         });
 
+        Cache::forget('gemini.available_models');
+
         return redirect()->route('admin.settings.index')->with('status', '設定を更新しました。');
     }
 
@@ -96,6 +124,8 @@ class SettingController extends Controller
                 'chatwork_api_token' => data_get($settingData, 'chatwork_api_token'),
                 'chatwork_webhook_token' => data_get($settingData, 'chatwork_webhook_token'),
                 'chatwork_bot_account_id' => data_get($settingData, 'chatwork_bot_account_id'),
+                'gemini_api_key' => data_get($settingData, 'gemini_api_key'),
+                'gemini_model' => data_get($settingData, 'gemini_model'),
                 'alert_window_minutes' => (int) data_get($settingData, 'alert_window_minutes', 15),
                 'alert_failure_threshold' => (int) data_get($settingData, 'alert_failure_threshold', 5),
                 'alert_room_id' => data_get($settingData, 'alert_room_id'),
@@ -118,6 +148,8 @@ class SettingController extends Controller
                 'ip_address' => $request->ip(),
             ]);
         });
+
+        Cache::forget('gemini.available_models');
 
         return redirect()->route('admin.settings.index')->with('status', '設定をロールバックしました。');
     }
