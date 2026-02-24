@@ -1,0 +1,17 @@
+{
+    "agents": [
+        "cursor",
+        "codex",
+        "gemini",
+        "claude_code"
+    ],
+    "guidelines": true,
+    "herd_mcp": true,
+    "mcp": true,
+    "nightwatch_mcp": false,
+    "sail": false,
+    "skills": [
+        "pest-testing",
+        "tailwindcss-development"
+    ]
+}
